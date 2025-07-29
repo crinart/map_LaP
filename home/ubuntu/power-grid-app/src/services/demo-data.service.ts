@@ -2,30 +2,73 @@
 import { MapObject, PowerLine, Comment, User } from '@/types';
 
 export class DemoDataService {
-  // Демо-пользователи для аутентификации
-  private static demoUsers: User[] = [
-    {
-      id: 'demo-user-1',
-      email: 'demo@example.com',
-      name: 'Демо Пользователь',
-      role: 'рабочий',
-      created_at: '2024-01-01T00:00:00Z'
+  // Ключи для localStorage
+  private static readonly DEMO_USERS_KEY = 'demo_users';
+  private static readonly DEMO_PASSWORDS_KEY = 'demo_passwords';
+  private static readonly DEMO_CURRENT_USER_KEY = 'demo_current_user';
+
+  // Получение демо-пользователей из localStorage
+  private static getDemoUsers(): User[] {
+    if (typeof window === 'undefined') return [];
+    
+    const stored = localStorage.getItem(this.DEMO_USERS_KEY);
+    if (stored) {
+      return JSON.parse(stored);
     }
-  ];
+    
+    // Инициализация с демо-пользователем по умолчанию
+    const defaultUsers: User[] = [
+      {
+        id: 'demo-user-1',
+        email: 'demo@example.com',
+        name: 'Демо Пользователь',
+        role: 'рабочий',
+        created_at: '2024-01-01T00:00:00Z'
+      }
+    ];
+    
+    localStorage.setItem(this.DEMO_USERS_KEY, JSON.stringify(defaultUsers));
+    return defaultUsers;
+  }
 
-  // Демо-пароли (в реальном приложении пароли должны быть хешированы)
-  private static demoPasswords: { [email: string]: string } = {
-    'demo@example.com': 'demo123'
-  };
+  // Получение демо-паролей из localStorage
+  private static getDemoPasswords(): { [email: string]: string } {
+    if (typeof window === 'undefined') return {};
+    
+    const stored = localStorage.getItem(this.DEMO_PASSWORDS_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    
+    // Инициализация с демо-паролем по умолчанию
+    const defaultPasswords = {
+      'demo@example.com': 'demo123'
+    };
+    
+    localStorage.setItem(this.DEMO_PASSWORDS_KEY, JSON.stringify(defaultPasswords));
+    return defaultPasswords;
+  }
 
-  // Текущий демо-пользователь
-  private static currentDemoUser: User | null = null;
+  // Сохранение демо-пользователей в localStorage
+  private static saveDemoUsers(users: User[]): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(this.DEMO_USERS_KEY, JSON.stringify(users));
+  }
+
+  // Сохранение демо-паролей в localStorage
+  private static saveDemoPasswords(passwords: { [email: string]: string }): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(this.DEMO_PASSWORDS_KEY, JSON.stringify(passwords));
+  }
 
   // Демо-аутентификация: регистрация
   static async demoSignUp(email: string, password: string, name: string, role: 'рабочий' | 'руководитель' = 'рабочий') {
     try {
+      const users = this.getDemoUsers();
+      const passwords = this.getDemoPasswords();
+      
       // Проверяем, не существует ли уже пользователь с таким email
-      const existingUser = this.demoUsers.find(user => user.email === email);
+      const existingUser = users.find(user => user.email === email);
       if (existingUser) {
         throw new Error('Пользователь с таким email уже существует');
       }
@@ -40,9 +83,16 @@ export class DemoDataService {
       };
 
       // Добавляем пользователя и пароль
-      this.demoUsers.push(newUser);
-      this.demoPasswords[email] = password;
-      this.currentDemoUser = newUser;
+      users.push(newUser);
+      passwords[email] = password;
+      
+      this.saveDemoUsers(users);
+      this.saveDemoPasswords(passwords);
+      
+      // Устанавливаем текущего пользователя
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(this.DEMO_CURRENT_USER_KEY, JSON.stringify(newUser));
+      }
 
       return { 
         data: { 
@@ -59,18 +109,24 @@ export class DemoDataService {
   // Демо-аутентификация: вход
   static async demoSignIn(email: string, password: string) {
     try {
+      const users = this.getDemoUsers();
+      const passwords = this.getDemoPasswords();
+      
       // Ищем пользователя
-      const user = this.demoUsers.find(u => u.email === email);
+      const user = users.find(u => u.email === email);
       if (!user) {
         throw new Error('Неверный email или пароль');
       }
 
       // Проверяем пароль
-      if (this.demoPasswords[email] !== password) {
+      if (passwords[email] !== password) {
         throw new Error('Неверный email или пароль');
       }
 
-      this.currentDemoUser = user;
+      // Устанавливаем текущего пользователя
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(this.DEMO_CURRENT_USER_KEY, JSON.stringify(user));
+      }
 
       return { 
         data: { 
@@ -86,13 +142,22 @@ export class DemoDataService {
 
   // Демо-аутентификация: выход
   static async demoSignOut() {
-    this.currentDemoUser = null;
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(this.DEMO_CURRENT_USER_KEY);
+    }
     return { error: null };
   }
 
   // Демо-аутентификация: получение текущего пользователя
   static async getDemoCurrentUser(): Promise<User | null> {
-    return this.currentDemoUser;
+    if (typeof window === 'undefined') return null;
+    
+    const stored = localStorage.getItem(this.DEMO_CURRENT_USER_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+    
+    return null;
   }
 
   // Демо-данные для объектов
