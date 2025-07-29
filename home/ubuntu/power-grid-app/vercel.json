@@ -1,0 +1,11 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "outputDirectory": ".next",
+  "installCommand": "npm install",
+  "devCommand": "npm run dev",
+  "env": {
+    "NEXT_PUBLIC_YANDEX_MAPS_API_KEY": "0ecb4dd6-bda0-465d-9ca1-901eca901307"
+  }
+}
+
