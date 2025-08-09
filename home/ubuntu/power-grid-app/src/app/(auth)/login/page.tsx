@@ -3,18 +3,15 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase'; // <— используем напрямую
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
-  const { signIn } = useAuth();
+  const [error, setError] = useState<string>('');
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -23,15 +20,46 @@ export default function LoginPage() {
     setError('');
 
     try {
-      const { error } = await signIn(email, password);
-      
+      // 1) Логинимся в Supabase
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
       if (error) {
-        setError('Неверный email или пароль');
-      } else {
-        router.push('/dashboard');
+        setError(error.message === 'Invalid login credentials'
+          ? 'Неверный email или пароль'
+          : `Ошибка входа: ${error.message}`);
+        setLoading(false);
+        return;
       }
-    } catch (err) {
-      setError('Произошла ошибка при входе');
+
+      // 2) Подтягиваем профиль/роль из public.users
+      const userId = data.user?.id;
+      if (!userId) {
+        setError('Не получен пользователь из Supabase');
+        setLoading(false);
+        return;
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('users')
+        .select('id, email, role, name')
+        .eq('id', userId)
+        .single();
+
+      if (profileError) {
+        // профиль могли не создать — не критично для входа
+        console.warn('Не удалось получить профиль пользователя:', profileError.message);
+      }
+
+      // 3) Сохраняем сессию/профиль локально (по желанию)
+      try {
+        localStorage.setItem('sb_session', JSON.stringify(data.session));
+        if (profile) localStorage.setItem('sb_profile', JSON.stringify(profile));
+      } catch {}
+
+      // 4) Переход в приложение
+      router.replace('/dashboard');
+    } catch (err: any) {
+      setError('Произошла непредвиденная ошибка входа');
     } finally {
       setLoading(false);
     }
@@ -48,7 +76,7 @@ export default function LoginPage() {
             Управление линиями электропередач
           </p>
         </div>
-        
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <Input
@@ -56,16 +84,16 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="Введите ваш email"
+              placeholder="worker@example.com"
               required
             />
-            
+
             <Input
               label="Пароль"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Введите пароль"
+              placeholder="••••••••"
               required
             />
           </div>
@@ -77,23 +105,9 @@ export default function LoginPage() {
           )}
 
           <div>
-            <Button
-              type="submit"
-              loading={loading}
-              className="w-full"
-              size="lg"
-            >
+            <Button type="submit" loading={loading} className="w-full" size="lg">
               Войти
             </Button>
-          </div>
-
-          <div className="text-center">
-            <p className="text-sm text-gray-600">
-              Нет аккаунта?{' '}
-              <Link href="/register" className="font-medium text-blue-600 hover:text-blue-500">
-                Зарегистрироваться
-              </Link>
-            </p>
           </div>
         </form>
       </div>
